@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#0a0a0a">
+<title>Analog Camera</title>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+:root{
+  --gold:#c8a882;--bg:#0a0a0a;--bg2:#121212;--bg3:#1a1a1a;
+  --border:#222;--text:#e8e0d0;--muted:#555;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--text);
+  font-family:'Courier Prime','Courier New',monospace;
+  overscroll-behavior:none;overflow:hidden}
+#app{width:100vw;height:100vh;height:100dvh;overflow:hidden;position:relative}
+
+.screen{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden}
+.screen.active{display:flex}
+
+/* ── SELECT ── */
+#s-select{background:var(--bg);overflow:hidden}
+.sel-header{flex-shrink:0;padding:calc(var(--safe-top) + 20px) 24px 16px;border-bottom:1px solid var(--border)}
+.logo-row{display:flex;align-items:baseline;gap:10px}
+.logo{font-family:'Special Elite',serif;font-size:28px;color:var(--gold);letter-spacing:4px}
+.logo-tag{font-size:10px;color:var(--muted);letter-spacing:3px;border:1px solid var(--border);padding:2px 6px}
+.sel-sub{font-size:11px;color:var(--muted);letter-spacing:2px;margin-top:6px}
+.film-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px calc(var(--safe-bottom) + 16px)}
+.film-item{display:flex;align-items:stretch;border:1px solid var(--border);margin-bottom:8px;
+  cursor:pointer;min-height:68px;transition:border-color .15s,opacity .2s;position:relative;overflow:hidden}
+.film-item:active{border-color:var(--gold)}
+.film-item.used{opacity:.45;pointer-events:none}
+.film-stripe{width:5px;flex-shrink:0}
+.film-num{width:38px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#333;flex-shrink:0}
+.film-body{flex:1;padding:12px 10px;min-width:0}
+.film-name{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.film-desc{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4}
+.film-chev{width:32px;display:flex;align-items:center;justify-content:center;color:#333;font-size:20px;flex-shrink:0}
+.film-cooldown{position:absolute;inset:0;background:rgba(10,10,10,.82);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.cooldown-icon{font-size:18px;color:#555}
+.cooldown-txt{font-size:11px;color:#555;letter-spacing:2px}
+.cooldown-time{font-size:13px;color:var(--gold);font-weight:700;letter-spacing:1px}
+
+/* ── CAMERA ── */
+#s-camera{background:#000}
+#vid-wrap{position:relative;flex:1;overflow:hidden;background:#0a0a0a;min-height:200px}
+#video{width:100%;height:100%;object-fit:cover;display:block}
+#cam-frozen{position:absolute;inset:0;background:rgba(0,0,0,.85);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:20}
+#cam-frozen.show{display:flex}
+.frozen-icon{font-size:40px;color:#555}
+.frozen-txt{font-size:12px;color:#888;letter-spacing:2px;text-align:center;line-height:1.6}
+.frozen-btn{padding:10px 28px;background:transparent;border:1px solid var(--gold);color:var(--gold);
+  font-family:inherit;font-size:11px;letter-spacing:2px;cursor:pointer}
+#vignette{position:absolute;inset:0;
+  background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.72) 100%);pointer-events:none}
+#flash-overlay{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .06s}
+.cam-hud{position:absolute;top:0;left:0;right:0;
+  padding:calc(var(--safe-top) + 12px) 18px 12px;
+  background:linear-gradient(to bottom,rgba(0,0,0,.85),transparent);
+  display:flex;align-items:center;justify-content:space-between;pointer-events:none}
+.hud-back{font-size:18px;color:#666;padding:8px;cursor:pointer;pointer-events:all}
+.hud-back:active{color:var(--gold)}
+.hud-film{font-size:11px;color:var(--gold);letter-spacing:2px;text-align:center}
+.hud-counter{font-size:14px;color:#fff;font-weight:700}
+.cam-controls{background:rgba(0,0,0,.92);padding:14px 20px calc(var(--safe-bottom) + 18px);
+  display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0}
+.cam-warning{font-size:11px;color:#ffb347;letter-spacing:2px;min-height:14px;text-align:center}
+#shutter-zone{display:flex;justify-content:center;align-items:center}
+.shutter-ring{width:76px;height:76px;border-radius:50%;border:3px solid var(--gold);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:transform .08s,opacity .2s;position:relative}
+.shutter-ring:active{transform:scale(.91)}
+.shutter-ring.locked{opacity:.25;pointer-events:none}
+.shutter-dot{width:58px;height:58px;border-radius:50%;background:var(--gold);transition:background .1s}
+.shutter-ring:active .shutter-dot{background:#a07840}
+.sprocket-row{width:100%;max-width:340px}
+.sprocket-strip{height:22px;background:#0e0e0e;border:1px solid #1e1e1e;overflow:hidden;position:relative}
+.sprocket-holes{display:flex;position:absolute;top:0;height:100%;align-items:center}
+.sp-hole{width:22px;height:22px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sp-hole-inner{width:12px;height:12px;border-radius:2px;background:#1a1a1a;border:1px solid #2a2a2a;transition:background .3s,border-color .3s}
+.sp-hole-inner.exposed{background:#160e02;border-color:#5a3e18}
+#advance-zone{display:none;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:340px}
+.advance-lbl{font-size:10px;color:#444;letter-spacing:3px}
+.lever-outer{width:100%;height:52px;background:#0e0e0e;border:1px solid var(--border);
+  position:relative;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.lever-outer:active{cursor:grabbing}
+.lever-progress{position:absolute;top:0;left:0;height:100%;background:rgba(200,168,130,.07);pointer-events:none}
+.lever-end-mark{position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  width:4px;height:28px;background:#222;border:1px solid #2e2e2e}
+.lever-thumb{position:absolute;top:5px;left:5px;width:46px;height:42px;
+  background:#242424;border:1px solid var(--gold);display:flex;align-items:center;justify-content:center;pointer-events:none}
+.lever-hint{font-size:10px;color:#3a3a3a;letter-spacing:2px;transition:opacity .3s}
+.advance-ready{font-size:11px;color:var(--gold);letter-spacing:3px;opacity:0;transition:opacity .3s;min-height:14px}
+
+/* ── DEVELOPING ── */
+#s-develop{background:var(--bg);align-items:center;justify-content:center;
+  padding:40px 24px calc(var(--safe-bottom) + 40px);text-align:center}
+.dev-glyph{font-size:72px;color:var(--gold);line-height:1;font-family:'Special Elite',serif;margin-bottom:20px}
+.dev-title{font-size:16px;font-weight:700;color:var(--gold);letter-spacing:6px;margin-bottom:6px}
+.dev-film-lbl{font-size:12px;color:var(--muted);letter-spacing:2px}
+.dev-bar-track{width:100%;max-width:280px;height:2px;background:#1e1e1e;margin:32px auto 14px}
+.dev-bar-fill{height:100%;background:var(--gold);width:0%;transition:width .5s ease}
+.dev-status-txt{font-size:12px;color:#444;letter-spacing:1px}
+.dev-count-txt{font-size:24px;font-weight:700;color:var(--gold);margin-top:8px}
+.dev-done-btn{margin-top:36px;padding:14px 40px;background:var(--gold);color:#0a0a0a;border:none;
+  font-family:inherit;font-size:12px;font-weight:700;letter-spacing:3px;cursor:pointer;display:none}
+.dev-done-btn:active{background:#b09060}
+
+/* ── GALLERY ── */
+#s-gallery{background:var(--bg);overflow:hidden}
+.gal-header{flex-shrink:0;padding:calc(var(--safe-top) + 14px) 18px 12px;
+  border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px}
+.gal-back{font-size:12px;color:var(--muted);cursor:pointer;letter-spacing:1px;padding:6px 0}
+.gal-back:active{color:var(--gold)}
+.gal-info{flex:1}
+.gal-title{font-size:13px;color:var(--gold);font-weight:700;letter-spacing:2px}
+.gal-sub{font-size:10px;color:#3a3a3a;margin-top:2px;letter-spacing:1px}
+.photo-grid{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px;
+  padding-bottom:calc(var(--safe-bottom) + 2px);align-content:start}
+.thumb-wrap{aspect-ratio:1;overflow:hidden;cursor:pointer;background:#111}
+.thumb-wrap canvas{width:100%;height:100%;display:block}
+#fullscreen-view{position:absolute;inset:0;background:rgba(0,0,0,.97);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;padding:calc(var(--safe-top) + 16px) 16px calc(var(--safe-bottom) + 24px);z-index:100}
+#fullscreen-view.active{display:flex}
+#full-canvas{max-width:100%;max-height:70vh;display:block}
+.fv-nav{display:flex;gap:32px;align-items:center}
+.fv-nav-btn{font-size:28px;color:#444;cursor:pointer;padding:8px 14px}
+.fv-nav-btn:active{color:var(--gold)}
+.fv-nav-count{font-size:12px;color:#444;letter-spacing:2px}
+.fv-actions{display:flex;gap:16px;align-items:center}
+.fv-dl{padding:10px 28px;background:transparent;border:1px solid var(--gold);color:var(--gold);
+  font-family:inherit;font-size:11px;letter-spacing:2px;cursor:pointer}
+.fv-dl:active{background:var(--gold);color:#0a0a0a}
+.fv-close{font-size:12px;color:#444;letter-spacing:2px;cursor:pointer;padding:10px 12px}
+.fv-close:active{color:var(--gold)}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- SELECT -->
+<div id="s-select" class="screen active">
+  <div class="sel-header">
+    <div class="logo-row"><span class="logo">ANALOG</span><span class="logo-tag">FILM SIM</span></div>
+    <div class="sel-sub">ELIGE TU ROLLO DE PELÍCULA</div>
+  </div>
+  <div class="film-list" id="filmList"></div>
+</div>
+
+<!-- CAMERA -->
+<div id="s-camera" class="screen">
+  <div id="vid-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <div id="vignette"></div>
+    <div id="flash-overlay"></div>
+    <div id="cam-frozen">
+      <div class="frozen-icon">⏸</div>
+      <div class="frozen-txt">La cámara se pausó<br>al bloquear el celular</div>
+      <button class="frozen-btn" id="btnReconnect">RECONECTAR CÁMARA</button>
+    </div>
+    <div class="cam-hud">
+      <span class="hud-back" id="btnBack">✕</span>
+      <span class="hud-film" id="hudFilmName">PROVIA</span>
+      <span class="hud-counter" id="hudCounter">0 / 15</span>
+    </div>
+  </div>
+  <div class="cam-controls">
+    <div class="cam-warning" id="camWarning"></div>
+    <div class="sprocket-row">
+      <div class="sprocket-strip">
+        <div class="sprocket-holes" id="sprocketHoles"></div>
+      </div>
+    </div>
+    <div id="shutter-zone">
+      <div class="shutter-ring" id="shutterBtn">
+        <div class="shutter-dot"></div>
+      </div>
+    </div>
+    <div id="advance-zone">
+      <div class="advance-lbl">AVANCE DE PELÍCULA</div>
+      <div class="lever-outer" id="leverTrack">
+        <div class="lever-progress" id="leverProgress"></div>
+        <div class="lever-end-mark"></div>
+        <div class="lever-thumb" id="leverThumb">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <rect x="2" y="9" width="18" height="4" rx="2" fill="#c8a882"/>
+            <path d="M14 5l6 6-6 6" stroke="#c8a882" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      <div class="lever-hint" id="leverHint">DESLIZA PARA AVANZAR →</div>
+      <div class="advance-ready" id="advanceReady">✓ LISTO</div>
+    </div>
+  </div>
+</div>
+
+<!-- DEVELOPING -->
+<div id="s-develop" class="screen">
+  <div class="dev-glyph">◎</div>
+  <div class="dev-title">REVELANDO</div>
+  <div class="dev-film-lbl" id="devFilmLbl"></div>
+  <div class="dev-bar-track"><div class="dev-bar-fill" id="devBarFill"></div></div>
+  <div class="dev-status-txt" id="devStatusTxt">Iniciando proceso...</div>
+  <div class="dev-count-txt" id="devCountTxt">0 / 15</div>
+  <button class="dev-done-btn" id="btnDevDone">VER FOTOS</button>
+</div>
+
+<!-- GALLERY -->
+<div id="s-gallery" class="screen">
+  <div class="gal-header">
+    <span class="gal-back" id="btnGalBack">← NUEVO ROLLO</span>
+    <div class="gal-info">
+      <div class="gal-title" id="galTitle">PROVIA</div>
+      <div class="gal-sub" id="galSub">15 FOTOS REVELADAS</div>
+    </div>
+  </div>
+  <div class="photo-grid" id="photoGrid"></div>
+  <div id="fullscreen-view">
+    <canvas id="full-canvas"></canvas>
+    <div class="fv-nav">
+      <span class="fv-nav-btn" id="fvPrev">‹</span>
+      <span class="fv-nav-count" id="fvNavCount">1 / 15</span>
+      <span class="fv-nav-btn" id="fvNext">›</span>
+    </div>
+    <div class="fv-actions">
+      <button class="fv-dl" id="btnDl">DESCARGAR</button>
+      <span class="fv-close" id="btnCloseFv">CERRAR</span>
+    </div>
+  </div>
+</div>
+
+</div>
+<script>
+'use strict';
+
+// ── FILM DATA ────────────────────────────────────────────────────────────────
+const FILMS = [
+  { name:'Provia / Standard',   desc:'Look neutro y equilibrado.',             stripe:'#C8A882', bg:'#141414',
+    grain:8,  halation:0,    fade:0,   fn:applyProvia },
+  { name:'Velvia / Vivid',      desc:'Colores intensos. Alto contraste.',      stripe:'#8BAD6A', bg:'#131A10',
+    grain:10, halation:0.3,  fade:0,   fn:applyVelvia },
+  { name:'Astia / Soft',        desc:'Colores suaves. Ideal para retratos.',   stripe:'#D4A898', bg:'#1A1414',
+    grain:7,  halation:0.15, fade:0,   fn:applyAstia },
+  { name:'Classic Chrome',      desc:'Look documental. Colores apagados.',     stripe:'#8A9BAA', bg:'#12151A',
+    grain:12, halation:0,    fade:0.1, fn:applyClassicChrome },
+  { name:'Reala Ace',           desc:'Realista pero rico. Cinematográfico.',   stripe:'#B8A870', bg:'#181410',
+    grain:9,  halation:0.2,  fade:0,   fn:applyRealaAce },
+  { name:'Classic Negative',    desc:'Alto contraste. Sombras profundas.',     stripe:'#9A7850', bg:'#140E08',
+    grain:14, halation:0.1,  fade:0.08,fn:applyClassicNegative },
+  { name:'Nostalgic Negative',  desc:'Look retro cálido. Amarillos y rojos.', stripe:'#D4844A', bg:'#1A1008',
+    grain:16, halation:0.25, fade:0.15,fn:applyNostalgicNeg },
+  { name:'Eterna / Cinema',     desc:'Cinematográfico. Bajo contraste.',       stripe:'#7A9098', bg:'#101518',
+    grain:11, halation:0.2,  fade:0.05,fn:applyEterna },
+  { name:'Acros',               desc:'Blanco y negro con grano natural.',      stripe:'#888',   bg:'#111',
+    grain:22, halation:0,    fade:0,   fn:applyAcros },
+];
+
+const MAX = 15;
+const COOLDOWN_MS = 60 * 60 * 1000; // 1 hora
+const LS_KEY = 'analog_cooldowns';
+
+let filmIdx = 0, shotCount = 0, frames = [], processed = [], camStream = null;
+let fullIdx = 0, leverDown = false, leverStartX = 0, leverDone = false;
+let cooldownTimers = {};
+
+const $ = id => document.getElementById(id);
+
+// ── COOLDOWN SYSTEM ──────────────────────────────────────────────────────────
+function getCooldowns() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e) { return {}; }
+}
+
+function setCooldown(idx) {
+  const cd = getCooldowns();
+  cd[idx] = Date.now();
+  localStorage.setItem(LS_KEY, JSON.stringify(cd));
+}
+
+function getRemainingMs(idx) {
+  const cd = getCooldowns();
+  if (!cd[idx]) return 0;
+  const elapsed = Date.now() - cd[idx];
+  return Math.max(0, COOLDOWN_MS - elapsed);
+}
+
+function fmtTime(ms) {
+  const m = Math.floor(ms / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  return m + 'm ' + String(s).padStart(2,'0') + 's';
+}
+
+// ── BUILD FILM LIST ──────────────────────────────────────────────────────────
+function buildFilmList() {
+  const list = $('filmList');
+  list.innerHTML = '';
+  FILMS.forEach((f, i) => {
+    const rem = getRemainingMs(i);
+    const used = rem > 0;
+    const el = document.createElement('div');
+    el.className = 'film-item' + (used ? ' used' : '');
+    el.id = 'film-item-' + i;
+    el.style.background = f.bg;
+    el.innerHTML = `
+      <div class="film-stripe" style="background:${f.stripe}"></div>
+      <div class="film-num">${String(i+1).padStart(2,'0')}</div>
+      <div class="film-body">
+        <div class="film-name">${f.name}</div>
+        <div class="film-desc">${f.desc}</div>
+      </div>
+      <div class="film-chev">›</div>
+      ${used ? `<div class="film-cooldown" id="cd-overlay-${i}">
+        <div class="cooldown-icon">◉</div>
+        <div class="cooldown-txt">ROLLO GASTADO</div>
+        <div class="cooldown-time" id="cd-time-${i}">${fmtTime(rem)}</div>
+      </div>` : ''}`;
+    if (!used) el.addEventListener('click', () => selectFilm(i));
+    list.appendChild(el);
+  });
+  startCooldownTickers();
+}
+
+function startCooldownTickers() {
+  Object.keys(cooldownTimers).forEach(k => clearInterval(cooldownTimers[k]));
+  cooldownTimers = {};
+  FILMS.forEach((_, i) => {
+    if (getRemainingMs(i) > 0) {
+      cooldownTimers[i] = setInterval(() => {
+        const rem = getRemainingMs(i);
+        const timeEl = $('cd-time-' + i);
+        if (timeEl) timeEl.textContent = fmtTime(rem);
+        if (rem <= 0) {
+          clearInterval(cooldownTimers[i]);
+          buildFilmList(); // refresh
+        }
+      }, 1000);
+    }
+  });
+}
+
+buildFilmList();
+
+// ── SCREEN NAV ───────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+// ── SELECT FILM ──────────────────────────────────────────────────────────────
+async function selectFilm(i) {
+  filmIdx = i; shotCount = 0; frames = []; processed = []; leverDone = false;
+  $('hudFilmName').textContent = FILMS[i].name.toUpperCase();
+  updateHUD();
+  buildSprocket();
+  showShutterZone();
+  showScreen('s-camera');
+  await startCamera();
+}
+
+// ── CAMERA ───────────────────────────────────────────────────────────────────
+async function startCamera() {
+  $('cam-frozen').classList.remove('show');
+  try {
+    if (camStream) camStream.getTracks().forEach(t => t.stop());
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    const v = $('video');
+    v.srcObject = camStream;
+    await v.play().catch(() => {});
+  } catch(e) {
+    let msg = 'No se pudo acceder a la cámara.\n\n';
+    if (e.name === 'NotAllowedError') msg += 'HTTPS requerido. Lee el README para hostear el archivo correctamente.';
+    else msg += e.message;
+    alert(msg);
+    showScreen('s-select');
+  }
+}
+
+function stopCamera() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+}
+
+// ── CAMERA RECONNECT ON VISIBILITY CHANGE ───────────────────────────────────
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') return;
+  // Only act if we're on the camera screen
+  if (!$('s-camera').classList.contains('active')) return;
+
+  // Check if stream is alive
+  const track = camStream && camStream.getVideoTracks()[0];
+  const dead = !track || track.readyState === 'ended' || track.muted;
+  if (dead) {
+    // Show frozen overlay instead of silently breaking
+    $('cam-frozen').classList.add('show');
+  } else {
+    // Stream still alive — ensure video is playing
+    const v = $('video');
+    if (v.paused) v.play().catch(() => {});
+  }
+});
+
+$('btnReconnect').addEventListener('click', async () => {
+  await startCamera();
+});
+
+$('btnBack').addEventListener('click', () => {
+  if (shotCount > 0) { alert('El rollo ya está cargado. Debes completar las 15 fotos.'); return; }
+  stopCamera();
+  showScreen('s-select');
+});
+
+// ── SHOOT ────────────────────────────────────────────────────────────────────
+$('shutterBtn').addEventListener('click', shoot);
+
+function shoot() {
+  if ($('shutterBtn').classList.contains('locked')) return;
+  $('shutterBtn').classList.add('locked');
+  const fl = $('flash-overlay');
+  fl.style.opacity = '1';
+  setTimeout(() => fl.style.opacity = '0', 120);
+  const v = $('video');
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth || 1280; c.height = v.videoHeight || 720;
+  c.getContext('2d').drawImage(v, 0, 0);
+  frames.push(c);
+  shotCount++;
+  updateHUD();
+  if (shotCount >= MAX) {
+    setTimeout(() => { stopCamera(); startDeveloping(); }, 300);
+  } else {
+    setTimeout(() => showAdvanceZone(), 220);
+  }
+}
+
+function updateHUD() {
+  $('hudCounter').textContent = shotCount + ' / ' + MAX;
+  const rem = MAX - shotCount;
+  const w = $('camWarning');
+  if (rem <= 3 && rem > 0) w.textContent = '¡ÚLTIMAS ' + rem + ' FOTOS!';
+  else if (rem === 0) w.textContent = 'REVELANDO...';
+  else w.textContent = '';
+  updateSprocket();
+}
+
+// ── SPROCKET ─────────────────────────────────────────────────────────────────
+function buildSprocket() {
+  const wrap = $('sprocketHoles'); wrap.innerHTML = '';
+  for (let i = 0; i < MAX + 8; i++) {
+    const h = document.createElement('div'); h.className = 'sp-hole';
+    h.innerHTML = `<div class="sp-hole-inner" id="sp${i}"></div>`;
+    wrap.appendChild(h);
+  }
+  updateSprocket();
+}
+
+function updateSprocket() {
+  for (let i = 0; i < MAX + 8; i++) {
+    const el = $('sp' + i);
+    if (el) el.className = 'sp-hole-inner' + (i < shotCount ? ' exposed' : '');
+  }
+}
+
+function animateSprocket(cb) {
+  const wrap = $('sprocketHoles');
+  let off = 0; const target = -22;
+  const tick = () => {
+    off = Math.max(off - 2.5, target);
+    wrap.style.transform = `translateX(${off}px)`;
+    if (off > target) requestAnimationFrame(tick);
+    else setTimeout(() => { wrap.style.transform = 'translateX(0)'; updateSprocket(); cb && cb(); }, 60);
+  };
+  requestAnimationFrame(tick);
+}
+
+// ── LEVER ────────────────────────────────────────────────────────────────────
+function showShutterZone() {
+  $('shutter-zone').style.display = 'flex';
+  $('advance-zone').style.display = 'none';
+  $('shutterBtn').classList.remove('locked');
+}
+
+function showAdvanceZone() {
+  $('shutter-zone').style.display = 'none';
+  $('advance-zone').style.display = 'flex';
+  leverDone = false; resetLever();
+  $('advanceReady').style.opacity = '0';
+  $('leverHint').style.opacity = '1';
+}
+
+function resetLever() {
+  $('leverThumb').style.left = '5px';
+  $('leverThumb').style.background = '#242424';
+  $('leverProgress').style.width = '4px';
+}
+
+function leverMaxX() { return $('leverTrack').offsetWidth - 56; }
+
+function onLeverDown(e) {
+  if (leverDone) return;
+  leverDown = true;
+  leverStartX = e.touches ? e.touches[0].clientX : e.clientX;
+  e.preventDefault();
+}
+
+function onLeverMove(e) {
+  if (!leverDown || leverDone) return;
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const dx = Math.max(0, Math.min(cx - leverStartX, leverMaxX()));
+  const pct = dx / leverMaxX();
+  $('leverThumb').style.left = (5 + dx) + 'px';
+  $('leverProgress').style.width = (dx + 5) + 'px';
+  const b = Math.round(36 + pct * 18);
+  $('leverThumb').style.background = `rgb(${b},${b},${b})`;
+  if (pct >= 0.93) completeLever();
+}
+
+function onLeverUp() { leverDown = false; }
+
+function completeLever() {
+  leverDone = true; leverDown = false;
+  $('leverThumb').style.left = (leverMaxX() + 5) + 'px';
+  $('leverThumb').style.background = '#3a3a3a';
+  $('leverHint').style.opacity = '0';
+  animateSprocket(() => {
+    const r = $('advanceReady'); r.style.opacity = '1';
+    setTimeout(() => { r.style.opacity = '0'; }, 600);
+    setTimeout(() => showShutterZone(), 700);
+  });
+}
+
+const lt = $('leverTrack');
+lt.addEventListener('mousedown', onLeverDown);
+lt.addEventListener('touchstart', onLeverDown, { passive: false });
+window.addEventListener('mousemove', onLeverMove);
+window.addEventListener('touchmove', onLeverMove, { passive: true });
+window.addEventListener('mouseup', onLeverUp);
+window.addEventListener('touchend', onLeverUp);
+
+// ── DEVELOPING ───────────────────────────────────────────────────────────────
+function startDeveloping() {
+  setCooldown(filmIdx); // mark this roll as used
+  showScreen('s-develop');
+  $('devFilmLbl').textContent = FILMS[filmIdx].name;
+  $('devBarFill').style.width = '0%';
+  $('devStatusTxt').textContent = 'Iniciando proceso...';
+  $('devCountTxt').textContent = '0 / ' + MAX;
+  $('btnDevDone').style.display = 'none';
+  processed = [];
+  processFrame(0);
+}
+
+function processFrame(i) {
+  if (i >= frames.length) {
+    $('devBarFill').style.width = '100%';
+    $('devStatusTxt').textContent = '¡Rollo revelado!';
+    $('devCountTxt').textContent = MAX + ' fotos listas';
+    $('btnDevDone').style.display = 'inline-block';
+    return;
+  }
+  setTimeout(() => {
+    $('devStatusTxt').textContent = 'Revelando foto ' + (i+1) + ' de ' + MAX + '...';
+    $('devCountTxt').textContent = (i+1) + ' / ' + MAX;
+    $('devBarFill').style.width = Math.round(((i+1)/MAX)*100) + '%';
+    const film = FILMS[filmIdx];
+    const src = frames[i];
+    const dst = document.createElement('canvas');
+    dst.width = src.width; dst.height = src.height;
+    const ctx = dst.getContext('2d');
+    ctx.drawImage(src, 0, 0);
+    const id = ctx.getImageData(0, 0, dst.width, dst.height);
+    film.fn(id.data);
+    addGrain(id.data, film.grain);
+    if (film.halation > 0) applyHalation(ctx, dst, film.halation);
+    if (film.fade > 0) applyFade(id.data, film.fade);
+    ctx.putImageData(id, 0, 0);
+    applyVignetteCanvas(ctx, dst.width, dst.height);
+    processed.push(dst);
+    processFrame(i + 1);
+  }, 500);
+}
+
+$('btnDevDone').addEventListener('click', () => buildGallery());
+
+// ── GALLERY ──────────────────────────────────────────────────────────────────
+function buildGallery() {
+  showScreen('s-gallery');
+  $('galTitle').textContent = FILMS[filmIdx].name.toUpperCase();
+  $('galSub').textContent = processed.length + ' FOTOS REVELADAS';
+  const grid = $('photoGrid'); grid.innerHTML = '';
+  processed.forEach((bmp, i) => {
+    const wrap = document.createElement('div'); wrap.className = 'thumb-wrap';
+    const th = document.createElement('canvas');
+    const size = 200; th.width = size; th.height = size;
+    const s = Math.min(size / bmp.width, size / bmp.height);
+    th.getContext('2d').drawImage(bmp, (size - bmp.width*s)/2, (size - bmp.height*s)/2, bmp.width*s, bmp.height*s);
+    wrap.appendChild(th);
+    wrap.addEventListener('click', () => openFull(i));
+    grid.appendChild(wrap);
+  });
+  buildFilmList(); // refresh cooldowns on return
+}
+
+function openFull(i) { fullIdx = i; renderFull(); $('fullscreen-view').classList.add('active'); }
+
+function renderFull() {
+  const bmp = processed[fullIdx], fc = $('full-canvas');
+  const sc = Math.min(window.innerWidth*.96/bmp.width, window.innerHeight*.64/bmp.height, 1);
+  fc.width = Math.round(bmp.width*sc); fc.height = Math.round(bmp.height*sc);
+  fc.getContext('2d').drawImage(bmp, 0, 0, fc.width, fc.height);
+  $('fvNavCount').textContent = (fullIdx+1) + ' / ' + processed.length;
+}
+
+$('fvPrev').addEventListener('click', () => { if(fullIdx>0){fullIdx--;renderFull();} });
+$('fvNext').addEventListener('click', () => { if(fullIdx<processed.length-1){fullIdx++;renderFull();} });
+$('btnCloseFv').addEventListener('click', () => $('fullscreen-view').classList.remove('active'));
+$('btnGalBack').addEventListener('click', () => showScreen('s-select'));
+$('btnDl').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.download = 'analog_' + FILMS[filmIdx].name.replace(/[\s/]+/g,'_') + '_' + (fullIdx+1) + '.jpg';
+  processed[fullIdx].toBlob(b => { a.href = URL.createObjectURL(b); a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }, 'image/jpeg', 0.95);
+});
+
+// ════════════════════════════════════════════════════════════════
+//  IMAGE EFFECTS
+// ════════════════════════════════════════════════════════════════
+function clamp(v){ return v<0?0:v>255?255:v; }
+
+// Grain — luminance-weighted so shadows get more grain (like real film)
+function addGrain(d, amount) {
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = (d[i] + d[i+1] + d[i+2]) / 3;
+    // Grain is stronger in shadows and midtones, softer in highlights
+    const shadow_boost = 1 + (1 - lum/255) * 0.8;
+    const g = (Math.random() - 0.5) * amount * shadow_boost;
+    d[i]   = clamp(d[i]   + g);
+    d[i+1] = clamp(d[i+1] + g);
+    d[i+2] = clamp(d[i+2] + g);
+  }
+}
+
+// Halation — blooms red/orange around highlights (light leaking into film base)
+function applyHalation(ctx, canvas, strength) {
+  const w = canvas.width, h = canvas.height;
+  // Get current pixels
+  const src = ctx.getImageData(0, 0, w, h);
+  const d = src.data;
+  // Create halation layer: only red channel of bright pixels
+  const hal = ctx.createImageData(w, h);
+  const hd = hal.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+    if (lum > 180) {
+      const boost = (lum - 180) / 75;
+      hd[i]   = clamp(d[i]   * boost * 1.4); // red
+      hd[i+1] = clamp(d[i+1] * boost * 0.4); // a little green
+      hd[i+2] = 0;
+      hd[i+3] = clamp(180 * boost * strength);
+    }
+  }
+  // Draw halation blurred on top
+  ctx.putImageData(hal, 0, 0);
+  const tmp = document.createElement('canvas');
+  tmp.width = w; tmp.height = h;
+  const tc = tmp.getContext('2d');
+  tc.filter = `blur(${Math.round(w * 0.012)}px)`;
+  tc.drawImage(canvas, 0, 0);
+  // Blend back
+  ctx.putImageData(src, 0, 0);
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = strength * 0.6;
+  ctx.drawImage(tmp, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+}
+
+// Faded film look — lifts blacks slightly (like aged film stock)
+function applyFade(d, amount) {
+  const lift = Math.round(amount * 28);
+  for (let i = 0; i < d.length; i += 4) {
+    // Lift shadows, leave highlights alone
+    const lum = (d[i] + d[i+1] + d[i+2]) / 3;
+    const t = Math.max(0, 1 - lum/120);
+    const v = Math.round(lift * t);
+    d[i]   = clamp(d[i]   + v);
+    d[i+1] = clamp(d[i+1] + v);
+    d[i+2] = clamp(d[i+2] + v);
+  }
+}
+
+// Vignette — drawn on canvas directly so it blends over the processed image
+function applyVignetteCanvas(ctx, w, h) {
+  const cx = w/2, cy = h/2;
+  const r = Math.sqrt(cx*cx + cy*cy);
+  const grad = ctx.createRadialGradient(cx, cy, r*0.45, cx, cy, r*1.05);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+}
+
+// ── Saturation / Contrast helpers ──
+function adjSat(d, f) {
+  for (let i = 0; i < d.length; i += 4) {
+    const g = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+    d[i]   = clamp(g + (d[i]-g)*f);
+    d[i+1] = clamp(g + (d[i+1]-g)*f);
+    d[i+2] = clamp(g + (d[i+2]-g)*f);
+  }
+}
+
+function adjCon(d, f) {
+  const s = 128*(1-f);
+  for (let i = 0; i < d.length; i += 4) {
+    d[i]   = clamp(d[i]*f+s);
+    d[i+1] = clamp(d[i+1]*f+s);
+    d[i+2] = clamp(d[i+2]*f+s);
+  }
+}
+
+// S-curve: compress highlights, boost midtones
+function sCurve(d, strength) {
+  const lut = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) {
+    const x = i / 255;
+    // Smooth S-curve via cubic
+    const y = x < 0.5
+      ? 2 * x * x * (1 + strength * (0.5 - x))
+      : 1 - 2*(1-x)*(1-x)*(1 + strength*(x-0.5));
+    lut[i] = clamp(Math.round(y * 255));
+  }
+  for (let i = 0; i < d.length; i += 4) {
+    d[i]   = lut[d[i]];
+    d[i+1] = lut[d[i+1]];
+    d[i+2] = lut[d[i+2]];
+  }
+}
+
+function liftShad(d, lift) {
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = (d[i]+d[i+1]+d[i+2])/3;
+    if (lum < 128) {
+      const t = (128-lum)/128, v = Math.round(lift*t);
+      d[i]=clamp(d[i]+v); d[i+1]=clamp(d[i+1]+v); d[i+2]=clamp(d[i+2]+v);
+    }
+  }
+}
+
+function compHL(d, c) {
+  const t = Math.round(c*255);
+  for (let i = 0; i < d.length; i += 4) {
+    for (let k=0;k<3;k++) if(d[i+k]>t) d[i+k]=clamp(t+Math.round((d[i+k]-t)/3));
+  }
+}
+
+// ── Per-film color response curves ──────────────────────────────────────────
+
+// 1. Provia — neutral, gentle S-curve, slight warmth
+function applyProvia(d) {
+  sCurve(d, 0.3);
+  for (let i=0;i<d.length;i+=4) { d[i]=clamp(d[i]+3); d[i+2]=clamp(d[i+2]-2); } // tiny warmth
+}
+
+// 2. Velvia — vivid, channel boosts, strong S-curve
+function applyVelvia(d) {
+  for (let i=0;i<d.length;i+=4) {
+    d[i]  =clamp(d[i]  *1.08);
+    d[i+1]=clamp(d[i+1]*1.13);
+    d[i+2]=clamp(d[i+2]*1.16);
+  }
+  adjSat(d,1.45); sCurve(d,0.7);
+}
+
+// 3. Astia — soft, compressed highlights, warm skin
+function applyAstia(d) {
+  compHL(d,.86); adjSat(d,.86); adjCon(d,.84);
+  for (let i=0;i<d.length;i+=4) { d[i]=clamp(d[i]+5); d[i+1]=clamp(d[i+1]+2); } // skin warmth
+}
+
+// 4. Classic Chrome — cyan shift, desaturated, documentary
+function applyClassicChrome(d) {
+  for (let i=0;i<d.length;i+=4) {
+    d[i]  =clamp(d[i]  *0.88);           // pull reds
+    d[i+1]=clamp(d[i+1]*0.96);           // pull greens slightly
+    d[i+2]=clamp(d[i+2]*1.08);           // push blues
+    const lum=(d[i]+d[i+1]+d[i+2])/3;
+    if (lum<90){const l=Math.round((90-lum)/7);d[i]=clamp(d[i]+l);d[i+1]=clamp(d[i+1]+l);d[i+2]=clamp(d[i+2]+l);}
+  }
+  adjSat(d,.76); adjCon(d,1.02);
+}
+
+// 5. Reala Ace — film-like tonality, gentle response
+function applyRealaAce(d) {
+  adjSat(d,1.06); sCurve(d,0.25);
+  for (let i=0;i<d.length;i+=4) { d[i]=clamp(d[i]+4); d[i+1]=clamp(d[i+1]+2); d[i+2]=clamp(d[i+2]-3); }
+}
+
+// 6. Classic Negative — crushed blacks, vintage, mid-contrast
+function applyClassicNegative(d) {
+  for (let i=0;i<d.length;i+=4) {
+    const lum=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+    if (lum<70) { const f=0.65+lum/220; d[i]=clamp(d[i]*f);d[i+1]=clamp(d[i+1]*f);d[i+2]=clamp(d[i+2]*f); }
+  }
+  adjSat(d,1.06); sCurve(d,0.6);
+  // Slight orange/yellow shift in shadows
+  for (let i=0;i<d.length;i+=4) {
+    const lum=(d[i]+d[i+1]+d[i+2])/3;
+    if (lum<100) { d[i]=clamp(d[i]+6); d[i+2]=clamp(d[i+2]-4); }
+  }
+}
+
+// 7. Nostalgic Negative — warm, faded, orange highlights
+function applyNostalgicNeg(d) {
+  for (let i=0;i<d.length;i+=4) {
+    d[i]  =clamp(d[i]  *1.14+10);
+    d[i+1]=clamp(d[i+1]*1.05+4);
+    d[i+2]=clamp(d[i+2]*0.78);
+  }
+  compHL(d,.90); sCurve(d,0.2);
+  adjSat(d,0.95);
+}
+
+// 8. Eterna — lifted shadows, low sat, cinematic
+function applyEterna(d) {
+  liftShad(d,22); adjSat(d,.70); adjCon(d,.76);
+  // Slight cool teal in shadows
+  for (let i=0;i<d.length;i+=4) {
+    const lum=(d[i]+d[i+1]+d[i+2])/3;
+    if (lum<90) { d[i+2]=clamp(d[i+2]+5); d[i]=clamp(d[i]-3); }
+  }
+}
+
+// 9. Acros — B&W, luminance conversion, micro-contrast boost
+function applyAcros(d) {
+  for (let i=0;i<d.length;i+=4) {
+    // Film-accurate luminance weights (Acros favors green channel like ortho film)
+    const lum = clamp(Math.round(0.25*d[i] + 0.65*d[i+1] + 0.10*d[i+2]));
+    d[i]=d[i+1]=d[i+2]=lum;
+  }
+  // Micro-contrast: local contrast boost
+  sCurve(d, 0.45);
+  adjCon(d, 1.12);
+}
+</script>
+</body>
+</html>
