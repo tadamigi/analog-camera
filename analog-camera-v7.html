@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="screen-orientation" content="landscape">
+<title>Filmicca</title>
+<style>
+:root{
+  --accent:#ffffff;--bg:#0a0a0a;--bg2:#111111;
+  --border:#2a2a2a;--text:#f0f0f0;--muted:#666;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue','Roboto',sans-serif;
+  overscroll-behavior:none;overflow:hidden}
+#app{width:100vw;height:100vh;height:100dvh;overflow:hidden;position:relative}
+.screen{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden}
+.screen.active{display:flex}
+
+/* ── SELECT ── */
+#s-select{background:var(--bg);overflow:hidden;justify-content:center}
+.sel-wrap{padding:calc(var(--safe-top) + 36px) 28px calc(var(--safe-bottom) + 32px)}
+.logo{font-size:34px;font-weight:700;color:#fff;letter-spacing:-1px}
+.sel-sub{font-size:12px;color:var(--muted);letter-spacing:1px;margin-top:6px;margin-bottom:40px;text-transform:uppercase}
+
+.film-cards{display:flex;flex-direction:column;gap:12px}
+.film-card{display:flex;align-items:stretch;border:1px solid var(--border);
+  cursor:pointer;min-height:96px;transition:opacity .15s,transform .1s;
+  position:relative;overflow:hidden;background:#111}
+.film-card:active{opacity:.7;transform:scale(.98)}
+.film-card-stripe{width:8px;flex-shrink:0}
+.film-card-body{flex:1;padding:18px 16px}
+.film-card-num{font-size:10px;color:#555;letter-spacing:2px;margin-bottom:8px;text-transform:uppercase}
+.film-card-name{font-size:20px;font-weight:600;color:#fff;letter-spacing:-0.3px}
+.film-card-tagline{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5}
+.film-card-cooldown{position:absolute;inset:0;background:rgba(10,10,10,.9);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px}
+.cd-label{font-size:10px;color:#444;letter-spacing:2px;text-transform:uppercase}
+.cd-time{font-size:16px;color:#fff;font-weight:600;letter-spacing:1px}
+
+/* saved roll banner */
+.saved-banner{border:1px solid #2a2a2a;background:#161616;padding:14px 16px;
+  margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.saved-banner:active{border-color:#fff}
+.saved-lbl{font-size:12px;color:#fff;letter-spacing:0px;font-weight:500}
+.saved-sub{font-size:11px;color:#555;margin-top:3px}
+.saved-arr{font-size:20px;color:#444}
+
+/* ══════════════════════════════════════════════
+   CAMERA SCREEN — forced landscape layout
+   Video fills left, sidebar 96px on right
+   Sidebar top: film name (rotated)
+   Sidebar mid: sprocket strip + shutter/lever
+   Sidebar bot: shot counter
+══════════════════════════════════════════════ */
+#s-camera{
+  background:#000;
+  flex-direction:row !important;
+}
+
+#vid-wrap{
+  position:relative;
+  flex:1;
+  overflow:hidden;
+  background:#000;
+}
+#video{width:100%;height:100%;object-fit:cover;display:block}
+#vignette{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 42%,rgba(0,0,0,.68) 100%)}
+#flash-overlay{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .05s}
+#cam-frozen{position:absolute;inset:0;background:rgba(0,0,0,.88);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:20}
+#cam-frozen.show{display:flex}
+.frozen-txt{font-size:12px;color:#777;letter-spacing:1px;text-align:center;line-height:1.9;text-transform:uppercase}
+.frozen-btn{padding:10px 24px;background:transparent;border:1px solid #fff;
+  color:#fff;font-family:inherit;font-size:11px;letter-spacing:2px;cursor:pointer}
+
+/* ✕ back button — top-left of video */
+.hud-back{
+  position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;
+  font-size:18px;color:rgba(255,255,255,.5);padding:8px;cursor:pointer;pointer-events:all;z-index:10;
+}
+.hud-back:active{color:#fff}
+
+/* ── RIGHT SIDEBAR ── */
+.cam-controls{
+  width:92px;
+  flex-shrink:0;
+  background:rgba(0,0,0,.95);
+  border-left:1px solid #1a1a1a;
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 0
+          calc(env(safe-area-inset-bottom,0px) + 10px);
+  padding-right:env(safe-area-inset-right,0px);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:space-between;
+  gap:0;
+}
+
+/* Film name — top, rotated */
+.hud-film{
+  font-size:10px;color:rgba(255,255,255,.6);letter-spacing:2px;
+  font-weight:500;text-transform:uppercase;
+  writing-mode:vertical-rl;
+  transform:rotate(180deg);
+  padding:4px 0;
+}
+
+/* Middle block: sprocket + shutter/lever */
+.cam-mid{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+  flex:1;
+  justify-content:center;
+}
+
+/* Sprocket strip — vertical, between film name and counter */
+.sprocket-strip{
+  width:20px;
+  height:80px;
+  background:#0a0a0a;
+  border:1px solid #1e1e1e;
+  overflow:hidden;
+  position:relative;
+  flex-shrink:0;
+  border-radius:2px;
+}
+.sprocket-holes{
+  display:flex;
+  flex-direction:column;
+  position:absolute;
+  left:0;width:100%;
+  align-items:center;
+  gap:0;
+}
+.sp-hole{width:20px;height:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sp-inner{
+  width:10px;height:10px;border-radius:1px;
+  background:#111;border:1px solid #222;
+  transition:background .25s,border-color .25s;
+}
+.sp-inner.exp{background:#e8e8e8;border-color:#fff;box-shadow:0 0 3px rgba(255,255,255,.4)}
+
+/* Shutter button */
+#shutter-zone{display:flex;justify-content:center;align-items:center}
+.shutter-ring{
+  width:68px;height:68px;border-radius:50%;
+  border:2.5px solid rgba(255,255,255,.9);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:transform .07s,opacity .2s;
+}
+.shutter-ring:active{transform:scale(.87)}
+.shutter-ring.locked{opacity:.18;pointer-events:none}
+.shutter-dot{width:54px;height:54px;border-radius:50%;background:#fff}
+.shutter-ring:active .shutter-dot{background:#ccc}
+
+/* Lever — same footprint as shutter, shown after shot */
+#advance-zone{
+  display:none;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+}
+.lever-outer{
+  width:44px;height:118px;
+  background:#0a0a0a;
+  border:1px solid rgba(255,255,255,.3);
+  border-radius:22px;
+  position:relative;
+  cursor:grab;
+  touch-action:none;
+  user-select:none;-webkit-user-select:none;
+  overflow:hidden;
+}
+.lever-progress{
+  position:absolute;bottom:0;left:0;width:100%;
+  background:rgba(255,255,255,.08);
+  height:0;
+  pointer-events:none;
+  border-radius:0 0 22px 22px;
+}
+.lever-end{
+  position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  height:3px;width:20px;background:#222;border-radius:2px;
+}
+.lever-thumb{
+  position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
+  width:32px;height:32px;border-radius:50%;
+  background:#2a2a2a;border:1.5px solid rgba(255,255,255,.8);
+  display:flex;align-items:center;justify-content:center;pointer-events:none;
+}
+.adv-hint{font-size:9px;color:#333;letter-spacing:1px;text-transform:uppercase}
+.adv-ready{font-size:11px;color:#fff;opacity:0;transition:opacity .3s;min-height:14px}
+.adv-lbl{display:none}
+
+/* Warning */
+.cam-warning{
+  font-size:8px;color:#fff;letter-spacing:1px;text-align:center;
+  text-transform:uppercase;writing-mode:vertical-rl;
+  opacity:0;transition:opacity .3s;height:0;overflow:hidden;
+}
+.cam-warning.visible{opacity:1;height:auto}
+
+/* Counter — bottom */
+.hud-counter{
+  font-size:12px;color:#fff;font-weight:600;
+  writing-mode:vertical-rl;transform:rotate(180deg);
+  padding:4px 0;letter-spacing:1px;
+}
+
+/* ── DEVELOPING ── */
+#s-develop{background:var(--bg);align-items:center;justify-content:center;
+  padding:40px 24px calc(var(--safe-bottom) + 40px);text-align:center}
+.dev-glyph{font-size:64px;color:#fff;line-height:1;margin-bottom:20px;font-weight:100}
+.dev-title{font-size:15px;font-weight:600;color:#fff;letter-spacing:4px;text-transform:uppercase}
+.dev-film{font-size:12px;color:var(--muted);letter-spacing:1px;margin-top:6px}
+.dev-track{width:100%;max-width:280px;height:1px;background:#222;margin:32px auto 12px}
+.dev-fill{height:100%;background:#fff;width:0%;transition:width .45s ease}
+.dev-status{font-size:12px;color:#444;letter-spacing:1px}
+.dev-count{font-size:22px;font-weight:600;color:#fff;margin-top:8px}
+.dev-done{margin-top:36px;padding:14px 44px;background:#fff;color:#000;border:none;
+  font-family:inherit;font-size:12px;font-weight:700;letter-spacing:3px;cursor:pointer;text-transform:uppercase}
+.dev-done:active{background:#ccc}
+
+/* ── GALLERY ── */
+#s-gallery{background:var(--bg);overflow:hidden}
+.gal-header{flex-shrink:0;padding:calc(var(--safe-top) + 14px) 18px 12px;
+  border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.gal-back{font-size:12px;color:var(--muted);cursor:pointer;letter-spacing:1px;padding:6px 0;flex-shrink:0;text-transform:uppercase}
+.gal-back:active{color:#fff}
+.gal-info{flex:1;min-width:0}
+.gal-title{font-size:14px;color:#fff;font-weight:600;letter-spacing:0px}
+.gal-sub{font-size:10px;color:#444;margin-top:2px;letter-spacing:1px;text-transform:uppercase}
+.gal-discard{font-size:11px;color:#444;cursor:pointer;letter-spacing:1px;
+  padding:6px 10px;border:1px solid #2a2a2a;flex-shrink:0;text-transform:uppercase}
+.gal-discard:active{color:#fff;border-color:#fff}
+.photo-grid{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px;
+  padding-bottom:calc(var(--safe-bottom) + 2px);align-content:start}
+.thumb-wrap{aspect-ratio:1;overflow:hidden;cursor:pointer;background:#111;position:relative}
+.thumb-wrap canvas{width:100%;height:100%;display:block}
+.thumb-num{position:absolute;bottom:4px;right:5px;font-size:9px;
+  color:rgba(255,255,255,.3);letter-spacing:1px;pointer-events:none}
+
+/* fullscreen */
+#fullview{position:absolute;inset:0;background:#000;
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;padding:calc(var(--safe-top) + 12px) 12px calc(var(--safe-bottom) + 20px);z-index:100}
+#fullview.active{display:flex}
+#full-canvas{max-width:100%;max-height:68vh;display:block}
+.fv-nav{display:flex;gap:28px;align-items:center}
+.fv-btn{font-size:30px;color:#444;cursor:pointer;padding:8px 14px}
+.fv-btn:active{color:#fff}
+.fv-count{font-size:12px;color:#444;letter-spacing:2px}
+.fv-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}
+.fv-dl{padding:10px 22px;background:transparent;border:1px solid #fff;
+  color:#fff;font-family:inherit;font-size:11px;letter-spacing:2px;cursor:pointer;text-transform:uppercase}
+.fv-dl:active{background:#fff;color:#000}
+.fv-close{font-size:12px;color:#444;letter-spacing:2px;cursor:pointer;padding:10px 12px;text-transform:uppercase}
+.fv-close:active{color:#fff}
+
+/* discard modal */
+#discard-modal{position:absolute;inset:0;background:rgba(0,0,0,.93);
+  display:none;align-items:center;justify-content:center;z-index:200;padding:32px}
+#discard-modal.active{display:flex}
+.discard-box{background:#111;border:1px solid #2a2a2a;padding:28px 24px;max-width:320px;width:100%;text-align:center}
+.discard-title{font-size:14px;color:#fff;letter-spacing:2px;margin-bottom:12px;font-weight:600;text-transform:uppercase}
+.discard-msg{font-size:12px;color:#555;line-height:1.8;margin-bottom:24px}
+.discard-actions{display:flex;gap:12px;justify-content:center}
+.discard-confirm{padding:10px 24px;background:#fff;color:#000;border:none;
+  font-family:inherit;font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;text-transform:uppercase}
+.discard-cancel{padding:10px 24px;background:transparent;border:1px solid #333;
+  color:#555;font-family:inherit;font-size:11px;letter-spacing:2px;cursor:pointer;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- SELECT -->
+<div id="s-select" class="screen active">
+  <div class="sel-wrap">
+    <div class="logo">Filmicca</div>
+    <div class="sel-sub">Elige tu rollo</div>
+    <div id="savedBannerWrap"></div>
+    <div class="film-cards" id="filmCards"></div>
+  </div>
+</div>
+
+<!-- CAMERA -->
+<div id="s-camera" class="screen">
+
+  <!-- VIDEO AREA -->
+  <div id="vid-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <div id="vignette"></div>
+    <div id="flash-overlay"></div>
+    <div id="cam-frozen">
+      <div class="frozen-txt">CÁMARA PAUSADA<br>AL BLOQUEAR EL CELULAR</div>
+      <button class="frozen-btn" id="btnReconnect">RECONECTAR</button>
+    </div>
+    <!-- ✕ floats over video -->
+    <span class="hud-back" id="btnBack">✕</span>
+  </div>
+
+  <!-- RIGHT SIDEBAR -->
+  <div class="cam-controls">
+
+    <!-- TOP: film name rotated -->
+    <div class="hud-film" id="hudFilm">PORTRA 400</div>
+
+    <!-- MIDDLE: sprocket + shutter (or lever) -->
+    <div class="cam-mid">
+
+      <!-- Sprocket — fills like a real film roll -->
+      <div class="sprocket-strip">
+        <div class="sprocket-holes" id="spHoles"></div>
+      </div>
+
+      <!-- Warning (últimas N fotos) -->
+      <div class="cam-warning" id="camWarn"></div>
+
+      <!-- SHUTTER -->
+      <div id="shutter-zone">
+        <div class="shutter-ring" id="shutterBtn">
+          <div class="shutter-dot"></div>
+        </div>
+      </div>
+
+      <!-- LEVER — replaces shutter after each shot -->
+      <div id="advance-zone">
+        <div class="adv-hint" id="advHint">↑</div>
+        <div class="lever-outer" id="leverTrack">
+          <div class="lever-progress" id="levProg"></div>
+          <div class="lever-end"></div>
+          <div class="lever-thumb" id="levThumb">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 12V4M3 7l5-5 5 5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="adv-ready" id="advReady">✓</div>
+      </div>
+
+    </div>
+
+    <!-- BOTTOM: shot counter -->
+    <div class="hud-counter" id="hudCount">1/15</div>
+
+  </div>
+</div>
+
+<!-- DEVELOPING -->
+<div id="s-develop" class="screen">
+  <div class="dev-glyph">◎</div>
+  <div class="dev-title">REVELANDO</div>
+  <div class="dev-film" id="devFilm"></div>
+  <div class="dev-track"><div class="dev-fill" id="devFill"></div></div>
+  <div class="dev-status" id="devStatus">Iniciando...</div>
+  <div class="dev-count" id="devCount">0 / 15</div>
+  <button class="dev-done" id="btnDevDone" style="display:none">VER FOTOS</button>
+</div>
+
+<!-- GALLERY -->
+<div id="s-gallery" class="screen">
+  <div class="gal-header">
+    <span class="gal-back" id="btnGalBack">← ROLLOS</span>
+    <div class="gal-info">
+      <div class="gal-title" id="galTitle"></div>
+      <div class="gal-sub" id="galSub"></div>
+    </div>
+    <span class="gal-discard" id="btnDiscard">DESCARTAR</span>
+  </div>
+  <div class="photo-grid" id="photoGrid"></div>
+  <div id="fullview">
+    <canvas id="full-canvas"></canvas>
+    <div class="fv-nav">
+      <span class="fv-btn" id="fvPrev">‹</span>
+      <span class="fv-count" id="fvCount">1 / 15</span>
+      <span class="fv-btn" id="fvNext">›</span>
+    </div>
+    <div class="fv-actions">
+      <button class="fv-dl" id="btnDlAll">↓ TODAS</button>
+      <button class="fv-dl" id="btnDl">↓ ESTA</button>
+      <span class="fv-close" id="btnCloseFv">CERRAR</span>
+    </div>
+  </div>
+  <div id="discard-modal">
+    <div class="discard-box">
+      <div class="discard-title">DESCARTAR ROLLO</div>
+      <div class="discard-msg">Se eliminarán las <span id="discardCount">15</span> fotos.<br>Esta acción no puede deshacerse.</div>
+      <div class="discard-actions">
+        <button class="discard-confirm" id="btnDiscardConfirm">ELIMINAR</button>
+        <button class="discard-cancel" id="btnDiscardCancel">CANCELAR</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════════════
+//  FILM DEFINITIONS — 2 rolls only
+// ══════════════════════════════════════════════════════════════════
+const FILMS = [
+  {
+    name: 'Portra 400',
+    tagline: 'Color · Kodak Portra emulation · Warm skin tones',
+    // Rainbow gradient stripe — full spectrum
+    stripeGradient: 'linear-gradient(to bottom, #ff0000, #ff8800, #ffff00, #00cc00, #0066ff, #8800ff, #ff0088)',
+    bg: '#111111',
+    bw: false
+  },
+  {
+    name: 'T-Max 400',
+    tagline: 'Black & White · Rich tones · Fine grain',
+    // B&W gradient stripe — black to white
+    stripeGradient: 'linear-gradient(to bottom, #000000, #ffffff)',
+    bg: '#0f0f0f',
+    bw: true
+  }
+];
+
+const MAX = 15;
+const COOLDOWN_MS = 60 * 60 * 1000;
+const LS_CD  = 'analog_cd_v6';
+const LS_GAL = 'analog_gal_v6';
+
+let filmIdx = 0, shotCount = 0, frames = [], processed = [], camStream = null;
+let fullIdx = 0, leverDown = false, leverStartX = 0, leverDone = false;
+let cdTimers = {};
+
+const $ = id => document.getElementById(id);
+
+// ── COOLDOWN ────────────────────────────────────────────────────────
+function getCDs()     { try{return JSON.parse(localStorage.getItem(LS_CD)||'{}')}catch(e){return{}} }
+function setCooldown(i){ const c=getCDs(); c[i]=Date.now(); localStorage.setItem(LS_CD,JSON.stringify(c)); }
+function getRemMs(i)  { const c=getCDs(); if(!c[i])return 0; return Math.max(0,COOLDOWN_MS-(Date.now()-c[i])); }
+function fmtMs(ms)    { const m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000); return m+'m '+String(s).padStart(2,'0')+'s'; }
+
+// ── GALLERY PERSISTENCE ─────────────────────────────────────────────
+function saveGallery() {
+  if (!processed.length) return;
+  try {
+    localStorage.setItem(LS_GAL, JSON.stringify({
+      filmIdx, filmName: FILMS[filmIdx].name,
+      photos: processed.map(c => c.toDataURL('image/jpeg', 0.88))
+    }));
+  } catch(e) {}
+}
+
+function loadGallery() {
+  try {
+    const raw = localStorage.getItem(LS_GAL);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    filmIdx = data.filmIdx;
+    processed = [];
+    let loaded = 0;
+    data.photos.forEach((src, i) => {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        c.getContext('2d').drawImage(img, 0, 0);
+        processed[i] = c;
+        if (++loaded === data.photos.length) buildGalleryUI();
+      };
+      img.src = src;
+    });
+    return true;
+  } catch(e) { return false; }
+}
+
+function clearGallery() {
+  localStorage.removeItem(LS_GAL);
+  processed = []; frames = [];
+}
+
+// ── FILM LIST ───────────────────────────────────────────────────────
+function buildFilmList() {
+  // Saved banner
+  const bw = $('savedBannerWrap'); bw.innerHTML = '';
+  const raw = localStorage.getItem(LS_GAL);
+  if (raw) {
+    try {
+      const data = JSON.parse(raw);
+      const b = document.createElement('div'); b.className = 'saved-banner';
+      b.innerHTML = `<div><div class="saved-lbl">FOTOS SIN DESCARGAR</div><div class="saved-sub">${data.filmName} · ${data.photos.length} fotos</div></div><div class="saved-arr">›</div>`;
+      b.addEventListener('click', () => { loadGallery(); showScreen('s-gallery'); });
+      bw.appendChild(b);
+    } catch(e){}
+  }
+
+  const fc = $('filmCards'); fc.innerHTML = '';
+  FILMS.forEach((f, i) => {
+    const rem = getRemMs(i), used = rem > 0;
+    const el = document.createElement('div');
+    el.className = 'film-card' + (used ? ' used' : '');
+    el.style.background = f.bg;
+    el.innerHTML = `
+      <div class="film-card-stripe" style="background:${f.stripeGradient};width:8px;flex-shrink:0"></div>
+      <div class="film-card-body">
+        <div class="film-card-num">ROLLO ${String(i+1).padStart(2,'0')}</div>
+        <div class="film-card-name">${f.name}</div>
+        <div class="film-card-tagline">${f.tagline}</div>
+      </div>
+      ${used ? `<div class="film-card-cooldown">
+        <div class="cd-label">ROLLO GASTADO</div>
+        <div class="cd-time" id="cdt-${i}">${fmtMs(rem)}</div>
+      </div>` : ''}`;
+    if (!used) el.addEventListener('click', () => selectFilm(i));
+    fc.appendChild(el);
+  });
+
+  Object.values(cdTimers).forEach(t => clearInterval(t)); cdTimers = {};
+  FILMS.forEach((_, i) => {
+    if (getRemMs(i) > 0) {
+      cdTimers[i] = setInterval(() => {
+        const r = getRemMs(i);
+        const el = $('cdt-' + i); if (el) el.textContent = fmtMs(r);
+        if (r <= 0) { clearInterval(cdTimers[i]); buildFilmList(); }
+      }, 1000);
+    }
+  });
+}
+
+buildFilmList();
+
+// ── LANDSCAPE LOCK ──────────────────────────────────────────────────
+// Lock to landscape when entering camera screen, release on exit
+function lockLandscape() {
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+  } catch(e) {}
+}
+function unlockOrientation() {
+  try {
+    if (screen.orientation && screen.orientation.unlock) {
+      screen.orientation.unlock();
+    }
+  } catch(e) {}
+}
+
+// ── AUTO-CALIBRATION ────────────────────────────────────────────────
+// Samples the video feed for ~1.5s before first shot is allowed.
+// Measures the camera's color bias and brightness offset vs neutral.
+// Stores correction factors applied before the Portra pipeline.
+let camCalib = { rScale:1, gScale:1, bScale:1, lumOffset:0, ready:false };
+
+function runCalibration(videoEl, callback) {
+  const sampleCanvas = document.createElement('canvas');
+  sampleCanvas.width = 64; sampleCanvas.height = 36; // tiny, fast
+  const ctx = sampleCanvas.getContext('2d');
+  let samples = 0, rSum=0, gSum=0, bSum=0, lumSum=0;
+  const totalSamples = 12; // ~1.2s at 100ms intervals
+  const interval = setInterval(() => {
+    if (!videoEl.videoWidth) return;
+    ctx.drawImage(videoEl, 0, 0, 64, 36);
+    const d = ctx.getImageData(0, 0, 64, 36).data;
+    let r=0,g=0,b=0,n=0;
+    // Sample center region only (avoids vignette edges)
+    for (let y=9;y<27;y++) for (let x=16;x<48;x++) {
+      const i=(y*64+x)*4;
+      r+=d[i]; g+=d[i+1]; b+=d[i+2]; n++;
+    }
+    r/=n; g/=n; b/=n;
+    const lum = r*0.299+g*0.587+b*0.114;
+    rSum+=r; gSum+=g; bSum+=b; lumSum+=lum;
+    samples++;
+    if (samples >= totalSamples) {
+      clearInterval(interval);
+      const rAvg=rSum/samples, gAvg=gSum/samples, bAvg=bSum/samples, lumAvg=lumSum/samples;
+      // Target: neutral grey ~ lum 100-130 (typical indoor scene)
+      // If camera is warm: rAvg > gAvg+bAvg/2 → pull red down
+      // If camera is cool: bAvg > rAvg → pull blue down
+      const neutral = (rAvg+gAvg+bAvg)/3;
+      if (neutral > 10 && neutral < 245) { // valid scene
+        camCalib.rScale = neutral/rAvg;
+        camCalib.gScale = neutral/gAvg;
+        camCalib.bScale = neutral/bAvg;
+        // Clamp corrections so we never overcorrect
+        camCalib.rScale = Math.max(0.75, Math.min(1.35, camCalib.rScale));
+        camCalib.gScale = Math.max(0.75, Math.min(1.35, camCalib.gScale));
+        camCalib.bScale = Math.max(0.75, Math.min(1.35, camCalib.bScale));
+      } else {
+        camCalib = { rScale:1, gScale:1, bScale:1, lumOffset:0, ready:true };
+      }
+      camCalib.ready = true;
+      callback && callback();
+    }
+  }, 100);
+}
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+  if (id === 's-camera') lockLandscape();
+  else unlockOrientation();
+}
+
+// ── SELECT FILM ─────────────────────────────────────────────────────
+async function selectFilm(i) {
+  filmIdx = i; shotCount = 0; frames = []; processed = []; leverDone = false;
+  camCalib = { rScale:1, gScale:1, bScale:1, lumOffset:0, ready:false };
+  $('hudFilm').textContent = FILMS[i].name.toUpperCase();
+  updateHUD(); buildSprocket(); showShutterZone();
+  $('shutterBtn').classList.add('locked'); // locked until calibration done
+  showScreen('s-camera');
+  await startCamera();
+}
+
+// ── CAMERA ──────────────────────────────────────────────────────────
+async function startCamera() {
+  $('cam-frozen').classList.remove('show');
+  try {
+    if (camStream) camStream.getTracks().forEach(t => t.stop());
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    const v = $('video'); v.srcObject = camStream;
+    await v.play().catch(() => {});
+    // Run calibration — unlocks shutter when done
+    runCalibration(v, () => {
+      $('shutterBtn').classList.remove('locked');
+    });
+  } catch(e) {
+    alert(e.name === 'NotAllowedError'
+      ? 'Permiso denegado.\nAbrí esta página desde HTTPS (Netlify o GitHub Pages).'
+      : 'Error de cámara: ' + e.message);
+    showScreen('s-select');
+  }
+}
+
+function stopCamera() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!$('s-camera').classList.contains('active')) return;
+  const t = camStream && camStream.getVideoTracks()[0];
+  if (!t || t.readyState === 'ended') $('cam-frozen').classList.add('show');
+  else { const v = $('video'); if (v.paused) v.play().catch(() => {}); }
+});
+
+$('btnReconnect').addEventListener('click', () => startCamera());
+$('btnBack').addEventListener('click', () => {
+  if (shotCount > 0) { alert('El rollo ya está cargado. Completá las 15 fotos.'); return; }
+  stopCamera(); showScreen('s-select');
+});
+
+// ── SHOOT ────────────────────────────────────────────────────────────
+$('shutterBtn').addEventListener('click', shoot);
+function shoot() {
+  if ($('shutterBtn').classList.contains('locked')) return;
+  $('shutterBtn').classList.add('locked');
+  const fl = $('flash-overlay'); fl.style.opacity = '1';
+  setTimeout(() => fl.style.opacity = '0', 110);
+  const v = $('video');
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth || 1280; c.height = v.videoHeight || 720;
+  c.getContext('2d').drawImage(v, 0, 0);
+  frames.push(c); shotCount++;
+  updateHUD();
+  if (shotCount >= MAX) setTimeout(() => { stopCamera(); startDeveloping(); }, 280);
+  else setTimeout(() => showAdvanceZone(), 200);
+}
+
+function updateHUD() {
+  $('hudCount').textContent = shotCount + '/' + MAX;
+  const rem = MAX - shotCount, w = $('camWarn');
+  if (rem <= 3 && rem > 0) { w.textContent = '¡' + rem + '!'; w.classList.add('visible'); }
+  else if (rem === 0) { w.textContent = '↯'; w.classList.add('visible'); }
+  else { w.textContent = ''; w.classList.remove('visible'); }
+  updateSprocket();
+}
+
+// ── SPROCKET (vertical) ─────────────────────────────────────────
+function buildSprocket() {
+  const w = $('spHoles'); w.innerHTML = '';
+  for (let i = 0; i < MAX + 4; i++) {
+    const h = document.createElement('div'); h.className = 'sp-hole';
+    h.innerHTML = `<div class="sp-inner" id="sp${i}"></div>`;
+    w.appendChild(h);
+  }
+  updateSprocket();
+}
+function updateSprocket() {
+  for (let i = 0; i < MAX + 4; i++) {
+    const e = $('sp' + i); if (e) e.className = 'sp-inner' + (i < shotCount ? ' exp' : '');
+  }
+}
+function animateSprocket(cb) {
+  const w = $('spHoles'); let off = 0;
+  const tick = () => {
+    off = Math.max(off - 2.5, -22);
+    w.style.transform = `translateY(${off}px)`;
+    if (off > -22) requestAnimationFrame(tick);
+    else setTimeout(() => { w.style.transform = 'translateY(0)'; updateSprocket(); cb && cb(); }, 60);
+  };
+  requestAnimationFrame(tick);
+}
+
+// ── LEVER ────────────────────────────────────────────────────────────
+function showShutterZone() {
+  $('shutter-zone').style.display = 'flex';
+  $('advance-zone').style.display = 'none';
+  $('shutterBtn').classList.remove('locked');
+}
+function showAdvanceZone() {
+  $('shutter-zone').style.display = 'none';
+  $('advance-zone').style.display = 'flex';
+  leverDone = false; resetLever();
+  $('advReady').style.opacity = '0'; $('advHint').style.opacity = '1';
+}
+function resetLever() {
+  $('levThumb').style.bottom = '4px';
+  $('levThumb').style.background = '#242424';
+  $('levProg').style.height = '4px';
+}
+function leverMaxY() { return $('leverTrack').offsetHeight - 42; } // thumb height = 34px + 4px padding
+
+function onLevDown(e) {
+  if (leverDone) return;
+  leverDown = true;
+  // Store starting Y (bottom = start, top = end)
+  leverStartX = e.touches ? e.touches[0].clientY : e.clientY;
+  e.preventDefault();
+}
+function onLevMove(e) {
+  if (!leverDown || leverDone) return;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  // Positive dy = finger moved UP (cy < leverStartX)
+  const dy = Math.max(0, Math.min(leverStartX - cy, leverMaxY()));
+  const pct = dy / leverMaxY();
+  $('levThumb').style.bottom = (4 + dy) + 'px';
+  $('levProg').style.height = (dy + 4) + 'px';
+  const b = Math.round(36 + pct * 22);
+  $('levThumb').style.background = `rgb(${b},${b},${b})`;
+  if (pct >= 0.93) completeLever();
+}
+function onLevUp() { leverDown = false; }
+function completeLever() {
+  leverDone = true; leverDown = false;
+  $('levThumb').style.bottom = (leverMaxY() + 4) + 'px';
+  $('levThumb').style.background = '#3a3a3a';
+  $('advHint').style.opacity = '0';
+  animateSprocket(() => {
+    $('advReady').style.opacity = '1';
+    setTimeout(() => { $('advReady').style.opacity = '0'; }, 600);
+    setTimeout(() => showShutterZone(), 700);
+  });
+}
+const lt = $('leverTrack');
+lt.addEventListener('mousedown', onLevDown);
+lt.addEventListener('touchstart', onLevDown, { passive: false });
+window.addEventListener('mousemove', onLevMove);
+window.addEventListener('touchmove', onLevMove, { passive: true });
+window.addEventListener('mouseup', onLevUp);
+window.addEventListener('touchend', onLevUp);
+
+// ── DEVELOPING ──────────────────────────────────────────────────────
+function startDeveloping() {
+  setCooldown(filmIdx);
+  showScreen('s-develop');
+  $('devFilm').textContent = FILMS[filmIdx].name;
+  $('devFill').style.width = '0%';
+  $('devStatus').textContent = 'Iniciando proceso...';
+  $('devCount').textContent = '0 / ' + MAX;
+  $('btnDevDone').style.display = 'none';
+  processed = [];
+  processFrame(0);
+}
+function processFrame(i) {
+  if (i >= frames.length) {
+    $('devFill').style.width = '100%'; $('devStatus').textContent = '¡Rollo revelado!';
+    $('devCount').textContent = MAX + ' fotos listas'; $('btnDevDone').style.display = 'inline-block';
+    saveGallery(); return;
+  }
+  setTimeout(() => {
+    $('devStatus').textContent = 'Revelando foto ' + (i + 1) + ' de ' + MAX + '...';
+    $('devCount').textContent = (i + 1) + ' / ' + MAX;
+    $('devFill').style.width = Math.round(((i + 1) / MAX) * 100) + '%';
+    processed.push(renderFilm(frames[i], FILMS[filmIdx]));
+    processFrame(i + 1);
+  }, 460);
+}
+$('btnDevDone').addEventListener('click', () => { buildGalleryUI(); showScreen('s-gallery'); });
+
+// ── GALLERY ──────────────────────────────────────────────────────────
+function buildGalleryUI() {
+  $('galTitle').textContent = FILMS[filmIdx].name.toUpperCase();
+  $('galSub').textContent = processed.length + ' FOTOS REVELADAS';
+  $('discardCount').textContent = processed.length;
+  const grid = $('photoGrid'); grid.innerHTML = '';
+  processed.forEach((bmp, i) => {
+    const wrap = document.createElement('div'); wrap.className = 'thumb-wrap';
+    const th = document.createElement('canvas'); const sz = 220; th.width = sz; th.height = sz;
+    const s = Math.min(sz / bmp.width, sz / bmp.height);
+    th.getContext('2d').drawImage(bmp, (sz - bmp.width * s) / 2, (sz - bmp.height * s) / 2, bmp.width * s, bmp.height * s);
+    const num = document.createElement('div'); num.className = 'thumb-num'; num.textContent = i + 1;
+    wrap.appendChild(th); wrap.appendChild(num);
+    wrap.addEventListener('click', () => openFull(i));
+    grid.appendChild(wrap);
+  });
+  buildFilmList();
+}
+function openFull(i) { fullIdx = i; renderFull(); $('fullview').classList.add('active'); }
+function renderFull() {
+  const bmp = processed[fullIdx], fc = $('full-canvas');
+  const sc = Math.min(window.innerWidth * .98 / bmp.width, window.innerHeight * .66 / bmp.height, 1);
+  fc.width = Math.round(bmp.width * sc); fc.height = Math.round(bmp.height * sc);
+  fc.getContext('2d').drawImage(bmp, 0, 0, fc.width, fc.height);
+  $('fvCount').textContent = (fullIdx + 1) + ' / ' + processed.length;
+}
+$('fvPrev').addEventListener('click', () => { if (fullIdx > 0) { fullIdx--; renderFull(); } });
+$('fvNext').addEventListener('click', () => { if (fullIdx < processed.length - 1) { fullIdx++; renderFull(); } });
+$('btnCloseFv').addEventListener('click', () => $('fullview').classList.remove('active'));
+$('btnGalBack').addEventListener('click', () => showScreen('s-select'));
+function dlCanvas(c, name) {
+  c.toBlob(b => { const a = document.createElement('a'); a.download = name; a.href = URL.createObjectURL(b); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }, 'image/jpeg', 0.95);
+}
+$('btnDl').addEventListener('click', () => dlCanvas(processed[fullIdx], 'analog_' + FILMS[filmIdx].name.replace(/\s/g,'_') + '_' + (fullIdx + 1) + '.jpg'));
+$('btnDlAll').addEventListener('click', () => {
+  processed.forEach((c, i) => setTimeout(() => dlCanvas(c, 'analog_' + FILMS[filmIdx].name.replace(/\s/g,'_') + '_' + (i + 1) + '.jpg'), i * 300));
+  $('fullview').classList.remove('active');
+});
+$('btnDiscard').addEventListener('click', () => $('discard-modal').classList.add('active'));
+$('btnDiscardCancel').addEventListener('click', () => $('discard-modal').classList.remove('active'));
+$('btnDiscardConfirm').addEventListener('click', () => {
+  clearGallery(); $('discard-modal').classList.remove('active'); buildFilmList(); showScreen('s-select');
+});
+
+// ══════════════════════════════════════════════════════════════════════
+//  FILM RENDERING ENGINE — v7
+//
+//  Diagnosis of previous failure:
+//  ACES + Reinhard in cascade = double compression = washed out grey fog.
+//  Fix: single well-calibrated S-curve LUT, no cascaded compressors.
+//
+//  Portra 400 pipeline (color):
+//   1. S-curve LUT        — gentle contrast that preserves midtones
+//   2. Shadow lift        — ONLY dark pixels (<60), not the whole range
+//   3. Warm color matrix  — pushes reds/yellows, pulls blues
+//   4. Hue-selective sat  — boost oranges/reds (skin), mute greens/blues
+//   5. Highlight rolloff  — ONLY pixels >200, gentle shoulder
+//   6. Halation           — smoothstep warm bloom on bright areas
+//   7. Grain              — hash-based, luminance-weighted
+//   8. Vignette
+//
+//  T-Max 400 pipeline (B&W):
+//   1. Weighted B&W conversion (boost red for skin, lower blue)
+//   2. S-curve LUT with deeper shadows
+//   3. Shadow lift (minimal, just avoids pure black)
+//   4. Grain (heavier, monochromatic)
+//   5. Vignette (stronger)
+// ══════════════════════════════════════════════════════════════════════
+
+// ── Portra S-curve LUT ────────────────────────────────────────────────
+const PORTRA_R = new Uint8Array(256);
+const PORTRA_G = new Uint8Array(256);
+const PORTRA_B = new Uint8Array(256);
+(function buildPortraLUTs() {
+  for (let i = 0; i < 256; i++) {
+    const x = i / 255;
+
+    // ── Red channel: gentler S in highlights to avoid posterization ──
+    let r = x;
+    r = r < 0.5
+      ? 2 * r * r * (1.48 - r)
+      : 1 - 2 * (1-r)*(1-r)*(1.32-(1-r)); // softer rolloff above 0.5 (was 1.4)
+    r = r * 1.03 + 0.006;                  // slight warm push (was 1.04)
+    PORTRA_R[i] = Math.max(0, Math.min(255, Math.round(r * 255)));
+
+    // ── Green channel: unchanged ──
+    let g = x;
+    g = g < 0.5
+      ? 2 * g * g * (1.48 - g)
+      : 1 - 2 * (1-g)*(1-g)*(1.38-(1-g));
+    g = g * 1.01 + 0.004;
+    PORTRA_G[i] = Math.max(0, Math.min(255, Math.round(g * 255)));
+
+    // ── Blue channel: unchanged ──
+    let b = x;
+    b = b < 0.5
+      ? 2 * b * b * (1.38 - b)
+      : 1 - 2 * (1-b)*(1-b)*(1.28-(1-b));
+    b = b * 0.94 - 0.006;
+    PORTRA_B[i] = Math.max(0, Math.min(255, Math.round(b * 255)));
+  }
+})();
+
+// ── T-Max 400 S-curve LUT ─────────────────────────────────────────────
+// Deeper shadows, punchy mids, slightly compressed highs
+// Characteristic of T-Max: high acutance, medium-high contrast
+const TMAX_LUT = new Uint8Array(256);
+(function buildTMaxLUT() {
+  for (let i = 0; i < 256; i++) {
+    const x = i / 255;
+    // Deeper S-curve than Portra
+    let v = x < 0.5
+      ? 2 * x * x * (1.55 - x)
+      : 1 - 2 * (1-x)*(1-x)*(1.45-(1-x));
+    // Slight lift to avoid pure black (film never goes to 0)
+    v = v * 0.93 + 0.018;
+    TMAX_LUT[i] = Math.max(0, Math.min(255, Math.round(v * 255)));
+  }
+})();
+
+// ── Hash-based grain (deterministic per pixel, varies per frame) ──────
+let grainSeed = Math.random() * 1000; // changes each render call
+function hashGrain(px, py, seed) {
+  // Goldenratio hash — fast and good distribution
+  const n = Math.sin(px * 127.1 + py * 311.7 + seed * 0.1) * 43758.5453;
+  return n - Math.floor(n); // [0..1]
+}
+
+// ── Main render function ───────────────────────────────────────────────
+function renderFilm(srcCanvas, film) {
+  const w = srcCanvas.width, h = srcCanvas.height;
+  const dst = document.createElement('canvas'); dst.width = w; dst.height = h;
+  const ctx = dst.getContext('2d');
+  ctx.drawImage(srcCanvas, 0, 0);
+  const id = ctx.getImageData(0, 0, w, h);
+  const d = id.data;
+  const isBW = film.bw;
+  grainSeed = Math.random() * 9999; // unique seed per photo
+
+  if (!isBW) {
+    // ════════════════ PORTRA 400 COLOR PIPELINE ════════════════
+
+    for (let i = 0; i < d.length; i += 4) {
+      let r = d[i], g = d[i+1], b = d[i+2];
+
+      // ── Step 0: Camera calibration correction ─────────────────────
+      // Compensates for each camera's individual color bias.
+      // Scales each channel toward neutral before film look is applied.
+      if (camCalib.rScale !== 1 || camCalib.gScale !== 1 || camCalib.bScale !== 1) {
+        r = Math.max(0, Math.min(255, Math.round(r * camCalib.rScale)));
+        g = Math.max(0, Math.min(255, Math.round(g * camCalib.gScale)));
+        b = Math.max(0, Math.min(255, Math.round(b * camCalib.bScale)));
+      }
+
+      // ── 1. S-curve tone LUT (per channel) ──────────────────────
+      r = PORTRA_R[r];
+      g = PORTRA_G[g];
+      b = PORTRA_B[b];
+
+      // ── 2. Shadow lift — pure luminance lift, NO color tint ────────
+      // Root cause of color breaking: any chroma-based gate is unreliable
+      // because the LUT already shifts channels, creating false chroma.
+      // Solution: just lift the floor uniformly. The green cast in shadows
+      // comes naturally from the LUT (green channel has slightly more lift
+      // in shadows by design in PORTRA_G). No additive tinting needed here.
+      const lum = (r * 77 + g * 150 + b * 29) >> 8;
+      if (lum < 50) {
+        const t = (50 - lum) / 50;  // 1 at pure black, 0 at lum=50
+        // Equal lift on all channels — color character comes from the LUT
+        r = Math.round(r + t * 8);
+        g = Math.round(g + t * 8);
+        b = Math.round(b + t * 7);
+      }
+
+      // ── 3. Highlight rolloff — gentler shoulder ────────────────────
+      // Raised threshold to 220 (was 210) and softer compression factor.
+      // This avoids the "painted" look on bright skies.
+      if (r > 220) r = 220 + Math.round((r - 220) * 0.55); // was 0.4
+      if (g > 220) g = 220 + Math.round((g - 220) * 0.55);
+      if (b > 225) b = 225 + Math.round((b - 225) * 0.50); // blues slightly more
+
+      // ── 4. Warm color matrix — REMOVED ─────────────────────────
+      // The per-channel LUT (PORTRA_R/G/B) already encodes the warm
+      // character: red channel has +1.03 boost, blue has -0.94 pull.
+      // Any additive matrix on top creates false color on neutral zones
+      // (grey sofas, white walls). The LUT alone is sufficient.
+      // (keeping variable names for saturation step below)
+      const nr = r, ng = g, nb = b;
+
+      // ── 5. Hue-selective saturation ─────────────────────────────
+      // Don't apply uniform desaturation — that's what killed it before.
+      // Instead: boost warm colors (skin, orange), pull cool colors (blue, green).
+      const luma = (r * 77 + g * 150 + b * 29) >> 8;
+      // Warm-cool detection: warm = R dominant, cool = B dominant
+      const warmth = (r - b) / 255; // [-1..1], positive = warm
+      // Skin tones (warm, mid-lum): boost saturation
+      // Cool tones (blue/green): reduce saturation slightly
+      let sat;
+      if (warmth > 0.05 && luma > 60 && luma < 210) {
+        sat = 0.96 + warmth * 0.08; // warm colors: near-full or slightly boosted
+      } else if (warmth < -0.02) {
+        sat = 0.88 + warmth * 0.1;  // cool colors: slightly muted
+      } else {
+        sat = 0.93;                  // neutral: slight muting
+      }
+      r = Math.round(luma + (r - luma) * sat);
+      g = Math.round(luma + (g - luma) * sat);
+      b = Math.round(luma + (b - luma) * sat);
+
+      // Clamp
+      d[i]   = Math.max(0, Math.min(255, r));
+      d[i+1] = Math.max(0, Math.min(255, g));
+      d[i+2] = Math.max(0, Math.min(255, b));
+    }
+
+    // ── 6. Halation pass ─────────────────────────────────────────
+    // Done after pixel loop — requires canvas blur
+    ctx.putImageData(id, 0, 0);
+    applyHalation(ctx, dst);
+    ctx.getImageData(0, 0, w, h); // sync
+
+    // Re-read for grain pass
+    const id2 = ctx.getImageData(0, 0, w, h);
+    const d2 = id2.data;
+
+    // ── 7. Grain — finer and stronger ────────────────────────────
+    // Grain size: 1px (fine silver halide feel, not coarse digital noise)
+    // Amount: raised from 14/11/10 to 18/15/13
+    // Weight curve: peaks harder in shadows (shadows always grainy on film)
+    for (let i = 0; i < d2.length; i += 4) {
+      const pi = i >> 2;
+      const px = pi % w, py = Math.floor(pi / w);
+      const lum = (d2[i] * 77 + d2[i+1] * 150 + d2[i+2] * 29) >> 8;
+      // Grain weight: strong in shadows/mids, gentle fade in highlights
+      // Using a curve that stays high longer before fading (real film behavior)
+      const gw = lum < 160
+        ? 1.0 - (lum / 160) * 0.35          // shadows: 1.0 → 0.65
+        : Math.max(0, 1.0 - (lum - 160) / 95 * 1.4); // highs: rapid fade
+      // Chromatic grain — each dye layer independent
+      const gR = (hashGrain(px, py, grainSeed)      - 0.5) * 18 * gw;
+      const gG = (hashGrain(px, py, grainSeed + 111) - 0.5) * 15 * gw;
+      const gB = (hashGrain(px, py, grainSeed + 222) - 0.5) * 13 * gw;
+      d2[i]   = Math.max(0, Math.min(255, d2[i]   + gR));
+      d2[i+1] = Math.max(0, Math.min(255, d2[i+1] + gG));
+      d2[i+2] = Math.max(0, Math.min(255, d2[i+2] + gB));
+    }
+    ctx.putImageData(id2, 0, 0);
+
+  } else {
+    // ════════════════ T-MAX 400 B&W PIPELINE ════════════════
+
+    for (let i = 0; i < d.length; i += 4) {
+      // B&W conversion: panchromatic weighting
+      // T-Max is sensitive to reds (makes skin tones brighter = more detail)
+      // and slightly suppresses blue (skies get more dramatic)
+      const lum = Math.round(d[i] * 0.35 + d[i+1] * 0.52 + d[i+2] * 0.13);
+      const v = TMAX_LUT[Math.min(255, lum)];
+      d[i] = d[i+1] = d[i+2] = v;
+    }
+
+    ctx.putImageData(id, 0, 0);
+
+    // Grain for B&W (monochromatic, heavier)
+    const id3 = ctx.getImageData(0, 0, w, h);
+    const d3 = id3.data;
+    for (let i = 0; i < d3.length; i += 4) {
+      const pi = i >> 2;
+      const px = pi % w, py = Math.floor(pi / w);
+      const lum = d3[i];
+      // T-Max grain: peaks in lower mids (~90), disappears in deep blacks and bright whites
+      const gw = lum < 20 ? lum / 20 * 0.6 :
+                 lum > 220 ? (255 - lum) / 35 * 0.4 :
+                 Math.max(0, 1 - Math.abs(lum - 110) / 140);
+      const gr = (hashGrain(px, py, grainSeed) - 0.5) * 22 * gw;
+      const v = Math.max(0, Math.min(255, Math.round(d3[i] + gr)));
+      d3[i] = d3[i+1] = d3[i+2] = v;
+    }
+    ctx.putImageData(id3, 0, 0);
+  }
+
+  // ── Vignette (both modes) ────────────────────────────────────────
+  applyVignette(ctx, w, h, isBW ? 0.62 : 0.50);
+
+  return dst;
+}
+
+// ── Halation — subtle warm-white bloom on bright areas ───────────────
+// Key fix: the glow uses the pixel's OWN color tinted slightly warm,
+// not a fixed orange-red. This way white areas glow white, warm areas glow warm.
+function applyHalation(ctx, canvas) {
+  const w = canvas.width, h = canvas.height;
+  const src = ctx.getImageData(0, 0, w, h);
+  const sd = src.data;
+
+  const hlCanvas = document.createElement('canvas');
+  hlCanvas.width = w; hlCanvas.height = h;
+  const hlCtx = hlCanvas.getContext('2d');
+  const hlId = hlCtx.createImageData(w, h);
+  const hd = hlId.data;
+
+  for (let i = 0; i < sd.length; i += 4) {
+    const lum = (sd[i] * 77 + sd[i+1] * 150 + sd[i+2] * 29) >> 8;
+    if (lum > 190) {
+      const t = (lum - 190) / 65;
+      const glow = Math.max(0, Math.min(1, t * t * (3 - 2 * t)));
+      // Use pixel's own color with a tiny warm bias on red
+      // White pixels glow white, not pink. Warm pixels glow warm.
+      hd[i]   = Math.min(255, Math.round(sd[i]   * glow * 1.05));
+      hd[i+1] = Math.min(255, Math.round(sd[i+1] * glow * 0.92));
+      hd[i+2] = Math.min(255, Math.round(sd[i+2] * glow * 0.80));
+      hd[i+3] = Math.min(255, Math.round(160 * glow));
+    }
+  }
+  hlCtx.putImageData(hlId, 0, 0);
+
+  const blurred = document.createElement('canvas');
+  blurred.width = w; blurred.height = h;
+  const bCtx = blurred.getContext('2d');
+  bCtx.filter = `blur(${Math.max(3, Math.round(w * 0.014))}px)`;
+  bCtx.drawImage(hlCanvas, 0, 0);
+
+  ctx.putImageData(src, 0, 0);
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.22;   // subtle — just a gentle glow, not a color wash
+  ctx.drawImage(blurred, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+}
+
+// ── Vignette ──────────────────────────────────────────────────────────
+function applyVignette(ctx, w, h, str) {
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(1, h / w);
+  const r = Math.max(w, h) * 0.56;
+  const g = ctx.createRadialGradient(0, 0, r * 0.25, 0, 0, r * 1.08);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(0.5, 'rgba(0,0,0,0)');
+  g.addColorStop(1, `rgba(0,0,0,${str})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(-w, -h, w * 2, h * 2);
+  ctx.restore();
+}
+</script>
+</body>
+</html>
